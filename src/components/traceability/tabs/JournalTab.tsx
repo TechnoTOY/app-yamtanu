@@ -30,10 +30,14 @@ export default function JournalTab({ store, onRefresh }: JournalTabProps) {
   const [filterType, setFilterType] = useState('tous');
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Form states
-  const [hiveId, setHiveId] = useState(store.trackedHives[0]?.id || '');
+  // Form states (supports 1 hive OR batch of hives in the same apiary)
+  const [selectedHiveIds, setSelectedHiveIds] = useState<string[]>(
+    store.trackedHives[0]?.id ? [store.trackedHives[0].id] : []
+  );
+  const [modalApiaryFilter, setModalApiaryFilter] = useState<string>('tous');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [eventType, setEventType] = useState<HiveJournalEvent['eventType']>('visite');
+  const [coupledHiveNumber, setCoupledHiveNumber] = useState('');
   const [colonyStatus, setColonyStatus] = useState<'vide' | 'occupee' | 'recolonisee'>('occupee');
   const [colonyHealth, setColonyHealth] = useState<HiveJournalEvent['colonyHealth']>('vigoureuse');
   const [queenPresent, setQueenPresent] = useState(true);
@@ -51,9 +55,11 @@ export default function JournalTab({ store, onRefresh }: JournalTabProps) {
 
   const handleOpenAdd = () => {
     const firstHive = store.trackedHives[0];
-    if (firstHive) setHiveId(firstHive.id);
+    setSelectedHiveIds(firstHive ? [firstHive.id] : []);
+    setModalApiaryFilter('tous');
     setDate(new Date().toISOString().split('T')[0]);
     setEventType('visite');
+    setCoupledHiveNumber('');
     setColonyStatus('occupee');
     setColonyHealth('vigoureuse');
     setQueenPresent(true);
@@ -67,18 +73,24 @@ export default function JournalTab({ store, onRefresh }: JournalTabProps) {
     setShowAddModal(true);
   };
 
+  const modalVisibleHives = store.trackedHives.filter(
+    h => modalApiaryFilter === 'tous' || h.apiaryId === modalApiaryFilter
+  );
+
+  const toggleHiveSelection = (id: string) => {
+    setSelectedHiveIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const hive = store.trackedHives.find(h => h.id === hiveId);
-    if (!hive) return;
+    if (selectedHiveIds.length === 0) return;
 
-    store.addHiveJournalEvent({
-      hiveId: hive.id,
-      hiveNumber: hive.hiveNumber,
-      apiaryId: hive.apiaryId,
-      apiaryName: hive.apiaryName,
+    const basePayload = {
       date,
       eventType,
+      coupledHiveNumber: coupledHiveNumber.trim() || undefined,
       colonyStatus,
       colonyHealth,
       queenPresent,
@@ -89,7 +101,21 @@ export default function JournalTab({ store, onRefresh }: JournalTabProps) {
       nextActionDate,
       operatorName: operatorName.trim(),
       notes: notes.trim()
-    });
+    };
+
+    if (selectedHiveIds.length === 1) {
+      const hive = store.trackedHives.find(h => h.id === selectedHiveIds[0]);
+      if (!hive) return;
+      store.addHiveJournalEvent({
+        ...basePayload,
+        hiveId: hive.id,
+        hiveNumber: hive.hiveNumber,
+        apiaryId: hive.apiaryId,
+        apiaryName: hive.apiaryName
+      });
+    } else {
+      store.addHiveJournalEventsBatch(selectedHiveIds, basePayload);
+    }
 
     setShowAddModal(false);
     onRefresh();
@@ -173,15 +199,18 @@ export default function JournalTab({ store, onRefresh }: JournalTabProps) {
         >
           <option value="tous">Tous les types d'événements</option>
           <option value="visite">Visite de contrôle</option>
-          <option value="intervention_sanitaire">Intervention sanitaire</option>
-          <option value="recolte">Récolte</option>
           <option value="installation">Installation</option>
+          <option value="appatage">Appâtage / Piège</option>
           <option value="colonisation">Colonisation</option>
-          <option value="depart_essaim">Départ d'essaim</option>
+          <option value="couplage">Couplage de colonies</option>
+          <option value="division">Division / Essaimage artificiel</option>
           <option value="recolonisation">Recolonisation</option>
+          <option value="depart_essaim">Départ d'essaim</option>
+          <option value="intervention_sanitaire">Intervention sanitaire</option>
           <option value="nourrissement">Nourrissement d'appoint</option>
+          <option value="recolte">Récolte</option>
           <option value="deplacement">Déplacement de ruche</option>
-          <option value="maintenance">Maintenance & Réparation</option>
+          <option value="maintenance">Maintenance &amp; Réparation</option>
         </select>
       </div>
 
@@ -233,6 +262,12 @@ export default function JournalTab({ store, onRefresh }: JournalTabProps) {
                   {event.broodStatus && (
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300">
                       Couvain : {event.broodStatus}
+                    </span>
+                  )}
+
+                  {event.coupledHiveNumber && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                      Ruche associée : {event.coupledHiveNumber}
                     </span>
                   )}
                 </div>
@@ -297,19 +332,66 @@ export default function JournalTab({ store, onRefresh }: JournalTabProps) {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 font-medium mb-1">Ruche concernée *</label>
-                  <select
-                    value={hiveId}
-                    onChange={e => setHiveId(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
-                  >
-                    {store.trackedHives.map(h => (
-                      <option key={h.id} value={h.id}>{h.hiveNumber} • {h.apiaryName}</option>
-                    ))}
-                  </select>
+              {/* Multi-hive selection by apiary */}
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="text-amber-300 font-bold">
+                    Ruche(s) concernée(s) ({selectedHiveIds.length} sélectionnée{selectedHiveIds.length > 1 ? 's' : ''}) *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={modalApiaryFilter}
+                      onChange={e => setModalApiaryFilter(e.target.value)}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
+                    >
+                      <option value="tous">Tous les ruchers</option>
+                      {store.apiaries.map(a => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedHiveIds(modalVisibleHives.map(h => h.id))}
+                      className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-lg text-[10.5px] font-bold cursor-pointer shrink-0"
+                    >
+                      Tout cocher
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedHiveIds([])}
+                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[10.5px] cursor-pointer shrink-0"
+                    >
+                      Vider
+                    </button>
+                  </div>
                 </div>
+
+                <div className="max-h-28 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 pr-1">
+                  {modalVisibleHives.map(h => {
+                    const checked = selectedHiveIds.includes(h.id);
+                    return (
+                      <label
+                        key={h.id}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] cursor-pointer transition ${
+                          checked
+                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 font-bold'
+                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleHiveSelection(h.id)}
+                          className="accent-amber-500"
+                        />
+                        <span className="font-mono truncate">{h.hiveNumber}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-slate-400 font-medium mb-1">Date de l'événement</label>
                   <input
@@ -319,22 +401,29 @@ export default function JournalTab({ store, onRefresh }: JournalTabProps) {
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-400 font-medium mb-1">Nature de l'intervention *</label>
                   <select
                     value={eventType}
-                    onChange={e => setEventType(e.target.value as any)}
+                    onChange={e => {
+                      const val = e.target.value as HiveJournalEvent['eventType'];
+                      setEventType(val);
+                      if (val === 'appatage' || val === 'depart_essaim') setColonyStatus('vide');
+                      else if (val === 'recolonisation') setColonyStatus('recolonisee');
+                      else setColonyStatus('occupee');
+                    }}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
                   >
                     <option value="visite">Visite d'inspection</option>
-                    <option value="intervention_sanitaire">Intervention sanitaire / Traitement</option>
-                    <option value="recolte">Récolte de miel</option>
+                    <option value="appatage">Appâtage (Pose piège à essaim)</option>
                     <option value="colonisation">Colonisation (Arrivée essaim)</option>
+                    <option value="couplage">Couplage de colonies</option>
+                    <option value="division">Division / Essaimage artificiel</option>
+                    <option value="recolonisation">Recolonisation</option>
                     <option value="depart_essaim">Départ de l'essaim</option>
+                    <option value="intervention_sanitaire">Intervention sanitaire / Traitement</option>
                     <option value="nourrissement">Nourrissement d'appoint</option>
+                    <option value="recolte">Récolte de miel</option>
                     <option value="maintenance">Maintenance / Nettoyage</option>
                   </select>
                 </div>
@@ -351,6 +440,21 @@ export default function JournalTab({ store, onRefresh }: JournalTabProps) {
                   </select>
                 </div>
               </div>
+
+              {(eventType === 'couplage' || eventType === 'division') && (
+                <div>
+                  <label className="block text-amber-300 font-medium mb-1">
+                    N° Ruche couplée / Ruche mère associée
+                  </label>
+                  <input
+                    type="text"
+                    value={coupledHiveNumber}
+                    onChange={e => setCoupledHiveNumber(e.target.value)}
+                    placeholder="Ex: YAM/26/002"
+                    className="w-full bg-slate-800 border border-amber-500/40 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              )}
 
               {colonyStatus !== 'vide' && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -327,38 +327,46 @@ export async function generateAllDataReportPdf(store: BambouMielStore): Promise<
 
   drawTable(
     [
-      { header: 'N° Ruche', width: 26 },
-      { header: 'Rucher', width: 40 },
-      { header: 'Proprietaire', width: 36 },
-      { header: 'Type', width: 34 },
+      { header: 'N° Ruche', width: 24 },
+      { header: 'Rucher & GPS', width: 42 },
+      { header: 'Proprietaire', width: 32 },
+      { header: 'Type & Origine', width: 40 },
       { header: 'Colonisation', width: 26, align: 'center' },
-      { header: 'Statut', width: 24, align: 'center' }
+      { header: 'Statut', width: 22, align: 'center' }
     ],
-    store.trackedHives.map((h) => [
-      h.hiveNumber,
-      h.apiaryName,
-      h.ownerName,
-      h.category === 'ecolo_artisanale' ? 'Ecolo Artisanale' : 'Ciment Barrettes',
-      h.colonizationStatus,
-      h.status
-    ])
+    store.trackedHives.map((h) => {
+      const apiaryGps = store.apiaries.find((a) => a.id === h.apiaryId)?.gpsCoordinates;
+      const gps = h.gpsCoordinates || apiaryGps || '-';
+      const typeLabel = h.category === 'ecolo_artisanale' ? 'Ecolo Art.' : 'Ciment Bar.';
+      const originLabel = h.coupledWithHive
+        ? `${h.originMode || 'couplage'} (${h.coupledWithHive})`
+        : h.originMode || 'standard';
+      return [
+        h.hiveNumber,
+        `${h.apiaryName} | GPS: ${gps}`,
+        h.ownerName,
+        `${typeLabel} - ${originLabel}`,
+        h.colonizationStatus,
+        h.status
+      ];
+    })
   );
 
   // ==================== SECTION 3 : JOURNAL INTERVENTIONS ====================
   drawSectionBanner(3, 'JOURNAL DE SUIVI & INTERVENTIONS APICOLES', `${store.journalEvents.length} intervention(s)`);
   drawTable(
     [
-      { header: 'Date', width: 21 },
-      { header: 'Ruche / Rucher', width: 36 },
-      { header: 'Type', width: 24 },
-      { header: 'Sante / Reine', width: 28 },
-      { header: 'Actions realisees', width: 52 },
-      { header: 'Operateur', width: 25 }
+      { header: 'Date', width: 20 },
+      { header: 'Ruche / Rucher', width: 35 },
+      { header: 'Type / Couplage', width: 30 },
+      { header: 'Sante / Reine', width: 27 },
+      { header: 'Actions realisees', width: 50 },
+      { header: 'Operateur', width: 24 }
     ],
     store.journalEvents.map((ev) => [
       ev.date,
       `${ev.hiveNumber} (${ev.apiaryName})`,
-      ev.eventType,
+      ev.coupledHiveNumber ? `${ev.eventType} -> ${ev.coupledHiveNumber}` : ev.eventType,
       `${ev.colonyHealth}${ev.queenPresent ? ' / Reine OK' : ''}`,
       ev.actionsDone || ev.notes || '-',
       ev.operatorName

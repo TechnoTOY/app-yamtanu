@@ -39,6 +39,31 @@ export default function ApiariesTab({ store, onRefresh, onSelectApiaryForHives }
   const [accessConditions, setAccessConditions] = useState('Piste 4x4 praticable, sentier ombragé.');
   const [vegetationType, setVegetationType] = useState('Savane arborée mellifère, anacardiers, karité.');
   const [notes, setNotes] = useState('');
+  const [isLocating, setIsLocating] = useState(false);
+  const [gpsStatusMsg, setGpsStatusMsg] = useState<string | null>(null);
+
+  const handleCaptureGps = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGpsStatusMsg('Géolocalisation non disponible sur cet appareil.');
+      return;
+    }
+    setIsLocating(true);
+    setGpsStatusMsg(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude.toFixed(5);
+        const lng = pos.coords.longitude.toFixed(5);
+        setGpsCoordinates(`${lat}, ${lng}`);
+        setGpsStatusMsg(`Position capturée (±${Math.round(pos.coords.accuracy)} m)`);
+        setIsLocating(false);
+      },
+      () => {
+        setGpsStatusMsg('Autorisation GPS refusée ou signal indisponible. Saisissez manuellement.');
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const nextApiaryNumber = store.generateApiaryNumber();
 
@@ -224,9 +249,21 @@ export default function ApiariesTab({ store, onRefresh, onSelectApiaryForHives }
 
                 {/* GPS and conditions */}
                 <div className="text-[11px] text-slate-400 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-slate-300 font-mono">
-                    <Navigation className="w-3 h-3 text-amber-400 shrink-0" />
-                    <span>GPS : {apiary.gpsCoordinates}</span>
+                  <div className="flex items-center justify-between gap-2 text-slate-300 font-mono">
+                    <span className="flex items-center gap-1.5 truncate">
+                      <Navigation className="w-3 h-3 text-amber-400 shrink-0" />
+                      <span>GPS : {apiary.gpsCoordinates || 'Non relevé'}</span>
+                    </span>
+                    {apiary.gpsCoordinates && (
+                      <a
+                        href={`https://www.google.com/maps?q=${encodeURIComponent(apiary.gpsCoordinates)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-sans font-bold text-emerald-400 hover:text-emerald-300 underline shrink-0"
+                      >
+                        Carte Maps
+                      </a>
+                    )}
                   </div>
                   {apiary.accessConditions && (
                     <p className="text-[11px] text-slate-400 line-clamp-2">
@@ -240,13 +277,21 @@ export default function ApiariesTab({ store, onRefresh, onSelectApiaryForHives }
                   )}
                 </div>
 
-                {/* Hives summary badge */}
-                <div className="p-2.5 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center justify-between text-xs">
-                  <span className="text-slate-400">Ruches implantées :</span>
-                  <div className="flex items-center gap-1.5">
-                    <strong className="text-white">{hivesInApiary.length} total</strong>
-                    <span className="text-emerald-400 text-[11px]">({occupiedCount} occupées)</span>
+                {/* Hives summary badge + numbers */}
+                <div className="p-2.5 bg-amber-500/5 border border-amber-500/15 rounded-xl space-y-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Ruches implantées :</span>
+                    <div className="flex items-center gap-1.5">
+                      <strong className="text-white">{hivesInApiary.length} total</strong>
+                      <span className="text-emerald-400 text-[11px]">({occupiedCount} occupées)</span>
+                    </div>
                   </div>
+                  {hivesInApiary.length > 0 && (
+                    <div className="text-[10px] text-amber-300/90 font-mono truncate" title={hivesInApiary.map(h => h.hiveNumber).join(', ')}>
+                      N° : {hivesInApiary.slice(0, 5).map(h => h.hiveNumber).join(', ')}
+                      {hivesInApiary.length > 5 ? ` (+${hivesInApiary.length - 5})` : ''}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -365,7 +410,18 @@ export default function ApiariesTab({ store, onRefresh, onSelectApiaryForHives }
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 font-medium mb-1">Coordonnées GPS</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-slate-400 font-medium">Coordonnées GPS</label>
+                    <button
+                      type="button"
+                      onClick={handleCaptureGps}
+                      disabled={isLocating}
+                      className="text-[10.5px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Navigation className="w-3 h-3" />
+                      <span>{isLocating ? 'Localisation...' : 'Ma position GPS'}</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={gpsCoordinates}
@@ -373,6 +429,9 @@ export default function ApiariesTab({ store, onRefresh, onSelectApiaryForHives }
                     placeholder="9.3372, 2.6303"
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 font-mono"
                   />
+                  {gpsStatusMsg && (
+                    <span className="text-[10px] text-amber-300 block mt-1">{gpsStatusMsg}</span>
+                  )}
                 </div>
                 <div>
                   <label className="block text-slate-400 font-medium mb-1">Date d'installation</label>

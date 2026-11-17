@@ -3540,13 +3540,26 @@ export class BambouMielStore {
   }
 
   addTrackedHive(data: Omit<TrackedHive, 'id' | 'hiveNumber' | 'history'> & { customHiveNumber?: string }): TrackedHive {
-    const id = `THIVE-${Date.now().toString().slice(-6)}`;
-    const hiveNumber = data.customHiveNumber || this.generateHiveNumber();
+    const id = `THIVE-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 5)}`;
+    const hiveNumber = data.customHiveNumber?.trim() || this.generateHiveNumber();
+    const matchedApiary = this.apiaries.find(a => a.id === data.apiaryId);
+    const resolvedGps = data.gpsCoordinates?.trim() || matchedApiary?.gpsCoordinates;
+    const modeLabel =
+      data.originMode === 'piege_appatee'
+        ? 'Ruche piège appâtée'
+        : data.originMode === 'couplage'
+        ? `Couplage${data.coupledWithHive ? ` avec ${data.coupledWithHive}` : ''}`
+        : data.originMode === 'division'
+        ? `Division${data.coupledWithHive ? ` depuis ${data.coupledWithHive}` : ''}`
+        : data.originMode === 'transvasement'
+        ? 'Transvasement colonie'
+        : 'Essaim / Installation directe';
+
     const initialHistory: HiveOccupationHistory = {
-      id: `HIST-${Date.now().toString().slice(-5)}`,
+      id: `HIST-${Date.now().toString().slice(-5)}-${Math.random().toString(36).slice(2, 5)}`,
       date: data.installationDate,
-      event: 'installation',
-      details: `Installation initiale au rucher ${data.apiaryName} (${data.category === 'ecolo_artisanale' ? 'Ruche écolo-artisanale bambou' : 'Ruche ciment à barrettes'})`,
+      event: data.originMode === 'couplage' ? 'couplage' : data.originMode === 'division' ? 'division' : 'installation',
+      details: `Installation au rucher ${data.apiaryName} (${modeLabel} • ${data.category === 'ecolo_artisanale' ? 'Bambou écolo' : 'Ciment barrettes'})`,
       author: data.ownerName
     };
 
@@ -3558,6 +3571,9 @@ export class BambouMielStore {
       apiaryName: data.apiaryName,
       ownerId: data.ownerId,
       ownerName: data.ownerName,
+      gpsCoordinates: resolvedGps,
+      originMode: data.originMode,
+      coupledWithHive: data.coupledWithHive,
       category: data.category,
       installationDate: data.installationDate,
       colonizationStatus: data.colonizationStatus,
@@ -3570,28 +3586,123 @@ export class BambouMielStore {
 
     this.trackedHives = [newHive, ...this.trackedHives];
 
-    // Ajouter un journal d'événement correspondant
     this.addHiveJournalEvent({
       hiveId: id,
       hiveNumber,
       apiaryId: data.apiaryId,
       apiaryName: data.apiaryName,
       date: data.installationDate,
-      eventType: 'installation',
+      eventType: data.originMode === 'couplage' ? 'couplage' : data.originMode === 'division' ? 'division' : data.originMode === 'piege_appatee' ? 'appatage' : 'installation',
+      coupledHiveNumber: data.coupledWithHive,
       colonyStatus: data.colonizationStatus,
       colonyHealth: data.colonyStrength === 'forte' ? 'vigoureuse' : 'normale',
       queenPresent: data.colonizationStatus !== 'vide',
       broodStatus: data.colonizationStatus !== 'vide' ? 'moyen' : 'absent',
       parasitesOrProblems: 'Aucun',
-      actionsDone: `Installation de la ruche ${hiveNumber} au rucher ${data.apiaryName}`,
-      nextAction: 'Visite de contrôle sous 21 jours',
-      nextActionDate: new Date(Date.now() + 21 * 86400000).toISOString().split('T')[0],
+      actionsDone: `Installation de la ruche ${hiveNumber} (${modeLabel}) au rucher ${data.apiaryName}`,
+      nextAction: data.colonizationStatus === 'vide' ? 'Vérifier prise d\'essaim sous 14 jours' : 'Visite de contrôle sous 21 jours',
+      nextActionDate: new Date(Date.now() + (data.colonizationStatus === 'vide' ? 14 : 21) * 86400000).toISOString().split('T')[0],
       operatorName: data.ownerName,
       notes: data.notes
     });
 
     this.saveAll();
     return newHive;
+  }
+
+  addTrackedHivesBatch(
+    data: Omit<TrackedHive, 'id' | 'hiveNumber' | 'history'> & {
+      customPrefix?: string;
+      customStartSeq?: number;
+    },
+    quantity: number
+  ): TrackedHive[] {
+    const safeQty = Math.max(1, Math.min(200, Math.floor(quantity || 1)));
+    const created: TrackedHive[] = [];
+    const newJournalEvents: HiveJournalEvent[] = [];
+    const matchedApiary = this.apiaries.find(a => a.id === data.apiaryId);
+    const resolvedGps = data.gpsCoordinates?.trim() || matchedApiary?.gpsCoordinates;
+    const daysNext = data.colonizationStatus === 'vide' ? 14 : 21;
+    const nextCheckDate = new Date(Date.now() + daysNext * 86400000).toISOString().split('T')[0];
+
+    const modeLabel =
+      data.originMode === 'piege_appatee'
+        ? 'Ruche piège appâtée'
+        : data.originMode === 'couplage'
+        ? `Couplage${data.coupledWithHive ? ` avec ${data.coupledWithHive}` : ''}`
+        : data.originMode === 'division'
+        ? `Division${data.coupledWithHive ? ` depuis ${data.coupledWithHive}` : ''}`
+        : data.originMode === 'transvasement'
+        ? 'Transvasement'
+        : 'Installation directe';
+
+    const cleanPrefix = data.customPrefix?.trim();
+    const startSeq = typeof data.customStartSeq === 'number' && data.customStartSeq > 0 ? data.customStartSeq : null;
+
+    for (let i = 0; i < safeQty; i++) {
+      const uidSuffix = `${i + 1}-${Math.random().toString(36).slice(2, 5)}`;
+      const id = `THIVE-${Date.now().toString().slice(-6)}-${uidSuffix}`;
+      const hiveNumber = cleanPrefix && startSeq !== null
+        ? `${cleanPrefix}${String(startSeq + i).padStart(3, '0')}`
+        : this.generateHiveNumber();
+
+      const initialHistory: HiveOccupationHistory = {
+        id: `HIST-${Date.now().toString().slice(-5)}-${uidSuffix}`,
+        date: data.installationDate,
+        event: data.originMode === 'couplage' ? 'couplage' : data.originMode === 'division' ? 'division' : 'installation',
+        details: `Installation en lot au rucher ${data.apiaryName} (${modeLabel} • ${data.category === 'ecolo_artisanale' ? 'Bambou écolo' : 'Ciment barrettes'})`,
+        author: data.ownerName
+      };
+
+      const newHive: TrackedHive = {
+        id,
+        hiveNumber,
+        apiaryId: data.apiaryId,
+        apiaryNumber: data.apiaryNumber,
+        apiaryName: data.apiaryName,
+        ownerId: data.ownerId,
+        ownerName: data.ownerName,
+        gpsCoordinates: resolvedGps,
+        originMode: data.originMode,
+        coupledWithHive: data.coupledWithHive,
+        category: data.category,
+        installationDate: data.installationDate,
+        colonizationStatus: data.colonizationStatus,
+        lastColonizedDate: data.colonizationStatus !== 'vide' ? data.installationDate : undefined,
+        colonyStrength: data.colonyStrength || 'forte',
+        status: 'active',
+        history: [initialHistory],
+        notes: data.notes
+      };
+
+      this.trackedHives = [newHive, ...this.trackedHives];
+      created.push(newHive);
+
+      newJournalEvents.push({
+        id: `JEV-${Date.now().toString().slice(-6)}-${uidSuffix}`,
+        hiveId: id,
+        hiveNumber,
+        apiaryId: data.apiaryId,
+        apiaryName: data.apiaryName,
+        date: data.installationDate,
+        eventType: data.originMode === 'couplage' ? 'couplage' : data.originMode === 'division' ? 'division' : data.originMode === 'piege_appatee' ? 'appatage' : 'installation',
+        coupledHiveNumber: data.coupledWithHive,
+        colonyStatus: data.colonizationStatus,
+        colonyHealth: data.colonyStrength === 'forte' ? 'vigoureuse' : 'normale',
+        queenPresent: data.colonizationStatus !== 'vide',
+        broodStatus: data.colonizationStatus !== 'vide' ? 'moyen' : 'absent',
+        parasitesOrProblems: 'Aucun',
+        actionsDone: `Installation de la ruche ${hiveNumber} (${modeLabel}) au rucher ${data.apiaryName}`,
+        nextAction: data.colonizationStatus === 'vide' ? 'Contrôle prise d\'essaim (appâtage)' : 'Visite de contrôle sous 21 jours',
+        nextActionDate: nextCheckDate,
+        operatorName: data.ownerName,
+        notes: data.notes
+      });
+    }
+
+    this.journalEvents = [...newJournalEvents, ...this.journalEvents];
+    this.saveAll();
+    return created;
   }
 
   updateTrackedHive(id: string, updates: Partial<TrackedHive>): boolean {
@@ -3683,17 +3794,25 @@ export class BambouMielStore {
     date: string, 
     author: string, 
     details: string,
-    colonyStrength?: 'forte' | 'moyenne' | 'faible'
+    colonyStrength?: 'forte' | 'moyenne' | 'faible',
+    customEventKind?: 'colonisation' | 'recolonisation' | 'depart' | 'appatage' | 'couplage' | 'division',
+    coupledHiveNumber?: string
   ): boolean {
     const hive = this.trackedHives.find(h => h.id === hiveId);
     if (!hive) return false;
 
-    const eventType = newStatus === 'vide' ? 'depart' : (newStatus === 'recolonisee' ? 'recolonisation' : 'colonisation');
+    const eventType: HiveOccupationHistory['event'] =
+      customEventKind ||
+      (newStatus === 'vide' ? 'depart' : (newStatus === 'recolonisee' ? 'recolonisation' : 'colonisation'));
+    const fullDetails = coupledHiveNumber?.trim()
+      ? `${details} (Ruche associée : ${coupledHiveNumber.trim()})`
+      : details;
+
     const historyEvent: HiveOccupationHistory = {
-      id: `HIST-${Date.now().toString().slice(-5)}`,
+      id: `HIST-${Date.now().toString().slice(-5)}-${Math.random().toString(36).slice(2, 5)}`,
       date,
       event: eventType,
-      details,
+      details: fullDetails,
       author
     };
 
@@ -3705,28 +3824,45 @@ export class BambouMielStore {
           lastColonizedDate: newStatus !== 'vide' ? date : h.lastColonizedDate,
           lastDepartureDate: newStatus === 'vide' ? date : h.lastDepartureDate,
           colonyStrength: colonyStrength || h.colonyStrength,
+          coupledWithHive: coupledHiveNumber?.trim() || h.coupledWithHive,
+          originMode:
+            eventType === 'couplage'
+              ? 'couplage'
+              : eventType === 'division'
+              ? 'division'
+              : eventType === 'appatage'
+              ? 'piege_appatee'
+              : h.originMode,
           history: [historyEvent, ...h.history]
         };
       }
       return h;
     });
 
-    this.addHiveJournalEvent({
+    const mappedJournalEventType: HiveJournalEvent['eventType'] =
+      eventType === 'depart'
+        ? 'depart_essaim'
+        : eventType;
+
+    const journalEntry: HiveJournalEvent = {
+      id: `JEV-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 5)}`,
       hiveId: hive.id,
       hiveNumber: hive.hiveNumber,
       apiaryId: hive.apiaryId,
       apiaryName: hive.apiaryName,
       date,
-      eventType: eventType === 'depart' ? 'depart_essaim' : (eventType === 'recolonisation' ? 'recolonisation' : 'colonisation'),
+      eventType: mappedJournalEventType,
+      coupledHiveNumber: coupledHiveNumber?.trim() || undefined,
       colonyStatus: newStatus,
-      colonyHealth: newStatus === 'vide' ? 'sans_reine' : (colonyStrength === 'forte' ? 'vigoureuse' : 'normale'),
+      colonyHealth: newStatus === 'vide' ? 'sans_reine' : (colonyStrength === 'forte' ? 'vigoureuse' : colonyStrength === 'faible' ? 'affaiblie' : 'normale'),
       queenPresent: newStatus !== 'vide',
       broodStatus: newStatus === 'vide' ? 'absent' : 'moyen',
       parasitesOrProblems: 'Suivi dynamique colonie',
-      actionsDone: details,
-      nextAction: 'Visite de suivi sous 15 jours',
+      actionsDone: fullDetails,
+      nextAction: eventType === 'appatage' ? 'Contrôle colonisation sous 14 jours' : 'Visite de suivi sous 15 jours',
       operatorName: author
-    });
+    };
+    this.journalEvents = [journalEntry, ...this.journalEvents];
 
     this.saveAll();
     return true;
@@ -3734,29 +3870,120 @@ export class BambouMielStore {
 
   // --- 4. Journal d'événements & Suivi ---
   addHiveJournalEvent(event: Omit<HiveJournalEvent, 'id'>): HiveJournalEvent {
-    const id = `JEV-${Date.now().toString().slice(-6)}`;
+    const id = `JEV-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 5)}`;
     const newEvent: HiveJournalEvent = {
       ...event,
       id
     };
     this.journalEvents = [newEvent, ...this.journalEvents];
 
-    // Mettre à jour l'état de la ruche si précisé
-    if (event.colonyStatus) {
-      this.trackedHives = this.trackedHives.map(h => {
-        if (h.id === event.hiveId) {
-          return {
-            ...h,
-            colonizationStatus: event.colonyStatus,
-            colonyStrength: event.colonyHealth === 'vigoureuse' ? 'forte' : (event.colonyHealth === 'affaiblie' ? 'faible' : 'moyenne')
-          };
-        }
-        return h;
-      });
-    }
+    // Mettre à jour l'état et l'historique de la ruche si précisé
+    const historyMap: Partial<Record<HiveJournalEvent['eventType'], HiveOccupationHistory['event']>> = {
+      appatage: 'appatage',
+      colonisation: 'colonisation',
+      recolonisation: 'recolonisation',
+      couplage: 'couplage',
+      division: 'division',
+      depart_essaim: 'depart'
+    };
+    const mappedHistEvent = historyMap[event.eventType];
+
+    this.trackedHives = this.trackedHives.map(h => {
+      if (h.id === event.hiveId) {
+        const nextHistory = mappedHistEvent
+          ? [
+              {
+                id: `HIST-${Date.now().toString().slice(-5)}-${Math.random().toString(36).slice(2, 5)}`,
+                date: event.date,
+                event: mappedHistEvent,
+                details: event.coupledHiveNumber
+                  ? `${event.actionsDone} (Ruche associée : ${event.coupledHiveNumber})`
+                  : event.actionsDone,
+                author: event.operatorName
+              },
+              ...h.history
+            ]
+          : h.history;
+
+        return {
+          ...h,
+          colonizationStatus: event.colonyStatus || h.colonizationStatus,
+          lastColonizedDate: event.colonyStatus && event.colonyStatus !== 'vide' ? event.date : h.lastColonizedDate,
+          lastDepartureDate: event.colonyStatus === 'vide' ? event.date : h.lastDepartureDate,
+          coupledWithHive: event.coupledHiveNumber || h.coupledWithHive,
+          colonyStrength: event.colonyHealth === 'vigoureuse' ? 'forte' : (event.colonyHealth === 'affaiblie' ? 'faible' : 'moyenne'),
+          history: nextHistory
+        };
+      }
+      return h;
+    });
 
     this.saveAll();
     return newEvent;
+  }
+
+  addHiveJournalEventsBatch(
+    hiveIds: string[],
+    baseEvent: Omit<HiveJournalEvent, 'id' | 'hiveId' | 'hiveNumber' | 'apiaryId' | 'apiaryName'>
+  ): HiveJournalEvent[] {
+    const created: HiveJournalEvent[] = [];
+    const targetSet = new Set(hiveIds);
+    const hives = this.trackedHives.filter(h => targetSet.has(h.id));
+
+    hives.forEach((hive, idx) => {
+      const uid = `${idx + 1}-${Math.random().toString(36).slice(2, 5)}`;
+      const ev: HiveJournalEvent = {
+        ...baseEvent,
+        id: `JEV-${Date.now().toString().slice(-6)}-${uid}`,
+        hiveId: hive.id,
+        hiveNumber: hive.hiveNumber,
+        apiaryId: hive.apiaryId,
+        apiaryName: hive.apiaryName
+      };
+      this.journalEvents = [ev, ...this.journalEvents];
+      created.push(ev);
+    });
+
+    const historyMap: Partial<Record<HiveJournalEvent['eventType'], HiveOccupationHistory['event']>> = {
+      appatage: 'appatage',
+      colonisation: 'colonisation',
+      recolonisation: 'recolonisation',
+      couplage: 'couplage',
+      division: 'division',
+      depart_essaim: 'depart'
+    };
+    const mappedHistEvent = historyMap[baseEvent.eventType];
+
+    this.trackedHives = this.trackedHives.map(h => {
+      if (!targetSet.has(h.id)) return h;
+      const nextHistory = mappedHistEvent
+        ? [
+            {
+              id: `HIST-${Date.now().toString().slice(-5)}-${Math.random().toString(36).slice(2, 5)}`,
+              date: baseEvent.date,
+              event: mappedHistEvent,
+              details: baseEvent.coupledHiveNumber
+                ? `${baseEvent.actionsDone} (Ruche associée : ${baseEvent.coupledHiveNumber})`
+                : baseEvent.actionsDone,
+              author: baseEvent.operatorName
+            },
+            ...h.history
+          ]
+        : h.history;
+
+      return {
+        ...h,
+        colonizationStatus: baseEvent.colonyStatus || h.colonizationStatus,
+        lastColonizedDate: baseEvent.colonyStatus !== 'vide' ? baseEvent.date : h.lastColonizedDate,
+        lastDepartureDate: baseEvent.colonyStatus === 'vide' ? baseEvent.date : h.lastDepartureDate,
+        coupledWithHive: baseEvent.coupledHiveNumber || h.coupledWithHive,
+        colonyStrength: baseEvent.colonyHealth === 'vigoureuse' ? 'forte' : (baseEvent.colonyHealth === 'affaiblie' ? 'faible' : 'moyenne'),
+        history: nextHistory
+      };
+    });
+
+    this.saveAll();
+    return created;
   }
 
   deleteHiveJournalEvent(id: string): boolean {

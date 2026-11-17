@@ -19,7 +19,8 @@ import {
   X,
   Upload,
   Camera,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Navigation
 } from 'lucide-react';
 import { readFileAsDataURL, compressImage } from '../../../utils/imageUtils';
 
@@ -188,8 +189,14 @@ export default function BeekeepersTab({ store, onRefresh, onSelectBeekeeperForCa
       {/* Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredBeekeepers.map(beekeeper => {
-          const apiaryCount = store.apiaries.filter(a => a.ownerId === beekeeper.id).length;
-          const hiveCount = store.trackedHives.filter(h => h.ownerId === beekeeper.id).length;
+          const ownerApiaries = store.apiaries.filter(a => a.ownerId === beekeeper.id);
+          const ownerHives = store.trackedHives.filter(h => h.ownerId === beekeeper.id);
+          const apiaryCount = ownerApiaries.length;
+          const hiveCount = ownerHives.length;
+          const occupiedCount = ownerHives.filter(h => h.colonizationStatus !== 'vide').length;
+          const emptyCount = hiveCount - occupiedCount;
+          const primaryGps = ownerApiaries.find(a => a.gpsCoordinates)?.gpsCoordinates || ownerHives.find(h => h.gpsCoordinates)?.gpsCoordinates;
+          const hiveNumbersPreview = ownerHives.slice(0, 6).map(h => h.hiveNumber).join(', ');
 
           return (
             <div 
@@ -243,10 +250,42 @@ export default function BeekeepersTab({ store, onRefresh, onSelectBeekeeperForCa
                   </div>
                 </div>
 
-                {/* Linked assets stats */}
-                <div className="flex items-center justify-between text-[11px] text-slate-400 px-1 py-1">
-                  <span>Ruchers rattachés : <strong className="text-white">{apiaryCount}</strong></span>
-                  <span>Ruches installées : <strong className="text-amber-400">{hiveCount}</strong></span>
+                {/* Linked assets stats + Hive numbers + GPS */}
+                <div className="space-y-1.5 bg-slate-950/60 border border-slate-800/80 rounded-xl p-2.5 text-[11px]">
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span>Ruchers : <strong className="text-white">{apiaryCount}</strong></span>
+                    <span>
+                      Ruches : <strong className="text-amber-400">{hiveCount}</strong>
+                      {hiveCount > 0 && (
+                        <span className="text-[10px] text-slate-400 ml-1">
+                          ({occupiedCount} occ. / {emptyCount} vid.)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+
+                  {hiveCount > 0 && (
+                    <div className="text-[10px] text-amber-300/90 font-mono truncate" title={ownerHives.map(h => h.hiveNumber).join(', ')}>
+                      N° : {hiveNumbersPreview}{ownerHives.length > 6 ? ` (+${ownerHives.length - 6})` : ''}
+                    </div>
+                  )}
+
+                  {primaryGps && (
+                    <div className="flex items-center justify-between gap-1 text-[10px] text-slate-400 font-mono">
+                      <span className="flex items-center gap-1 truncate">
+                        <Navigation className="w-3 h-3 text-emerald-400 shrink-0" />
+                        GPS : {primaryGps}
+                      </span>
+                      <a
+                        href={`https://www.google.com/maps?q=${encodeURIComponent(primaryGps)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-400 hover:text-emerald-300 underline font-sans shrink-0"
+                      >
+                        Carte
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
 

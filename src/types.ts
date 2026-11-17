@@ -496,7 +496,16 @@ export interface Apiary {
 export interface HiveOccupationHistory {
   id: string;
   date: string;
-  event: 'installation' | 'colonisation' | 'depart' | 'recolonisation' | 'deplacement' | 'changement_proprietaire';
+  event:
+    | 'installation'
+    | 'appatage'
+    | 'colonisation'
+    | 'couplage'
+    | 'division'
+    | 'depart'
+    | 'recolonisation'
+    | 'deplacement'
+    | 'changement_proprietaire';
   details: string;
   author: string;
 }
@@ -509,6 +518,9 @@ export interface TrackedHive {
   apiaryName: string;
   ownerId: string;
   ownerName: string;
+  gpsCoordinates?: string; // Géolocalisation héritée du rucher ou propre à la ruche
+  originMode?: 'piege_appatee' | 'essaimage_naturel' | 'couplage' | 'division' | 'transvasement';
+  coupledWithHive?: string; // N° de ruche couplée / mère en cas de couplage ou division
   category: 'ecolo_artisanale' | 'ciment_barrettes_superieures';
   installationDate: string;
   colonizationStatus: 'vide' | 'occupee' | 'recolonisee';
@@ -527,7 +539,21 @@ export interface HiveJournalEvent {
   apiaryId: string;
   apiaryName: string;
   date: string;
-  eventType: 'visite' | 'installation' | 'colonisation' | 'depart_essaim' | 'recolonisation' | 'intervention_sanitaire' | 'nourrissement' | 'recolte' | 'deplacement' | 'maintenance';
+  eventType:
+    | 'visite'
+    | 'installation'
+    | 'appatage'
+    | 'colonisation'
+    | 'couplage'
+    | 'division'
+    | 'depart_essaim'
+    | 'recolonisation'
+    | 'intervention_sanitaire'
+    | 'nourrissement'
+    | 'recolte'
+    | 'deplacement'
+    | 'maintenance';
+  coupledHiveNumber?: string; // N° de ruche associée lors d'un couplage ou d'une division
   colonyStatus: 'vide' | 'occupee' | 'recolonisee';
   colonyHealth: 'vigoureuse' | 'normale' | 'affaiblie' | 'reine_vue' | 'sans_reine';
   queenPresent: boolean;
