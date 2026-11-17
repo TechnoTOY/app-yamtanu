@@ -1,0 +1,6 @@
+{
+  "name": "Yamtaanu",
+  "description": "Système ERP complet intégrant l'entreprise Les Triangles : agro-apiculture à Komiguéa (Bénin), jus bio, thés, hôtellerie éco-lodge, salles de conférence, caisse POS, gestion intégrée des stocks sectoriels & intrants, retours clients et comptabilité SYSCOHADA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

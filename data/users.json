@@ -1,0 +1,56 @@
+[
+  {
+    "id": "USR-001",
+    "name": "Administrateur Principal",
+    "emailOrLogin": "admin",
+    "role": "Administrateur Principal",
+    "accessCode": "yamtaanu",
+    "active": true,
+    "department": "Général",
+    "addedAt": "2026-01-01"
+  },
+  {
+    "id": "USR-002",
+    "name": "Jean Orou (Resp. Miellerie)",
+    "emailOrLogin": "jean.miellerie",
+    "phone": "+229 97 12 34 56",
+    "role": "Administrateur",
+    "accessCode": "8492",
+    "active": true,
+    "department": "Miellerie & Ruchers",
+    "addedAt": "2026-03-15"
+  },
+  {
+    "id": "USR-003",
+    "name": "Sarah Bio (Atelier Jus & Thés)",
+    "emailOrLogin": "sarah.atelier",
+    "phone": "+229 95 23 45 67",
+    "role": "Employé",
+    "accessCode": "3310",
+    "active": true,
+    "department": "Atelier Jus & Thés",
+    "addedAt": "2026-04-10"
+  },
+  {
+    "id": "USR-004",
+    "name": "Réception Éco-Lodge",
+    "emailOrLogin": "reception.lodge",
+    "phone": "+229 90 22 88 99",
+    "role": "Opérateur",
+    "accessCode": "1020",
+    "active": true,
+    "department": "Éco-Lodge",
+    "addedAt": "2026-05-01"
+  },
+  {
+    "id": "USR-005",
+    "name": "Amadou Diallo (Apiculteur Terrain)",
+    "emailOrLogin": "amadou.apicole",
+    "phone": "+229 96 11 22 33",
+    "role": "Employé",
+    "accessCode": "5522",
+    "active": true,
+    "department": "Miellerie & Ruchers",
+    "addedAt": "2026-06-25"
+  }
+]
